@@ -74,6 +74,16 @@ static char *supply_list[] = {
 
 /* Get LP charging mode state */
 unsigned int lpcharge;
+#if defined(CONFIG_MACH_P4NOTE) && defined(CONFIG_QC_MODEM)
+static int battery_get_lpm_state(char *str)
+{
+	get_option(&str, &lpcharge);
+	pr_info("%s: Low power charging mode: %d\n", __func__, lpcharge);
+
+	return lpcharge;
+}
+__setup("lpcharge=", battery_get_lpm_state);
+#endif
 
 static enum power_supply_property sec_battery_properties[] = {
 	POWER_SUPPLY_PROP_STATUS,
@@ -246,8 +256,12 @@ static int check_ta_conn(struct battery_data *battery)
 #ifdef CONFIG_SAMSUNG_LPM_MODE
 static void lpm_mode_check(struct battery_data *battery)
 {
+#if defined(CONFIG_MACH_P4NOTE) && defined(CONFIG_QC_MODEM)
+	battery->charging_mode_booting = lpcharge;
+#else
 	battery->charging_mode_booting = lpcharge =
 				battery->pdata->check_lp_charging_boot();
+#endif
 	pr_info("%s : charging_mode_booting(%d)\n", __func__,
 			battery->charging_mode_booting);
 }

@@ -326,7 +326,11 @@ static void determine_jack_type(struct sec_jack_info *hi)
 	while (gpio_get_value(pdata->det_gpio) ^ npolarity) {
 		adc = sec_jack_get_adc_data(hi->padc);
 
+#if defined(CONFIG_TARGET_LOCALE_KOR)
+		pr_info("%s: adc = %d\n", __func__, adc);
+#else
 		pr_debug("%s: adc = %d\n", __func__, adc);
+#endif
 
 		if (adc < 0)
 			break;

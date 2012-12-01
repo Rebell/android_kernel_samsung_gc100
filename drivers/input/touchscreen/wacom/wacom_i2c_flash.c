@@ -546,6 +546,9 @@ int wacom_i2c_flash(struct wacom_i2c *wac_i2c)
 	}
 #endif
 
+#ifdef WACOM_HAVE_FWE_PIN
+	wac_i2c->wac_pdata->compulsory_flash_mode(true);
+#endif
 	wake_lock(&wac_i2c->wakelock);
 
 	ret = wacom_i2c_flash_cmd(wac_i2c);
@@ -645,6 +648,9 @@ mcu_type_error:
 
 fw_update_error:
 	wake_unlock(&wac_i2c->wakelock);
+#ifdef WACOM_HAVE_FWE_PIN
+	wac_i2c->wac_pdata->compulsory_flash_mode(false);
+#endif
 	return ret;
 }
 

@@ -33,10 +33,7 @@
 #include <linux/timer.h>
 
 #ifdef CONFIG_SENSORS_SSP_SENSORHUB
-#include <linux/completion.h>
-#include <linux/kthread.h>
-#include <linux/list.h>
-#include <linux/spinlock.h>
+#include "ssp_sensorhub.h"
 #endif
 
 #define SSP_DBG		1
@@ -159,6 +156,7 @@ enum {
 #define MSG2SSP_SSP_SLEEP	0xC1
 #define MSG2SSP_STS		0xC2	/* Start to Send */
 #define MSG2SSP_RTS		0xC4	/* Ready to Send */
+#define MSG2SSP_STT		0xC8
 #define MSG2SSP_SRM		0xCA	/* Start to Read MSG */
 #define MSG2SSP_SSM		0xCB	/* Start to Send MSG */
 #define MSG2SSP_SSD		0xCE	/* Start to Send Data Type & Length */
@@ -167,14 +165,6 @@ enum {
 #define MSG_ACK					0x80	/* ACK from SSP to AP */
 #define MSG_NAK					0x70	/* NAK from SSP to AP */
 
-#ifdef CONFIG_SENSORS_SSP_SENSORHUB
-#define SUBCMD_GPIOWAKEUP			0X02
-#define SUBCMD_POWEREUP				0X04
-#define MSG2SSP_STT				0xC8
-#define LIBRARY_MAX_NUM				5
-#define LIBRARY_MAX_TRY				32
-#define EVENT_WAIT_COUNT			3
-#endif
 
 /* SSP_INSTRUCTION_CMD */
 enum {
@@ -239,14 +229,6 @@ struct calibraion_data {
 	int z;
 };
 
-#ifdef CONFIG_SENSORS_SSP_SENSORHUB
-struct sensorhub_event {
-	char *library_data;
-	int length;
-	struct list_head list;
-};
-#endif
-
 struct ssp_data {
 	struct input_dev *acc_input_dev;
 	struct input_dev *gyro_input_dev;
@@ -264,7 +246,15 @@ struct ssp_data {
 	struct calibraion_data gyrocal;
 	struct sensor_value buf[SENSOR_MAX];
 	struct device *sen_dev;
+	struct device *mcu_device;
+	struct device *acc_device;
+	struct device *gyro_device;
+	struct device *mag_device;
+	struct device *prs_device;
+	struct device *prox_device;
+	struct device *light_device;
 
+	bool bCheckShutdown;
 	bool bCheckSuspend;
 	bool bDebugEnabled;
 	bool bMcuIRQTestSuccessed;
@@ -287,6 +277,7 @@ struct ssp_data {
 	unsigned int uSsdFailCnt;
 	unsigned int uResetCnt;
 	unsigned int uI2cFailCnt;
+	unsigned int uInstFailCnt;
 	unsigned int uTimeOutCnt;
 	unsigned int uIrqCnt;
 	unsigned int uBusyCnt;
@@ -315,21 +306,7 @@ struct ssp_data {
 #endif
 
 #ifdef CONFIG_SENSORS_SSP_SENSORHUB
-	struct input_dev *sensorhub_input_dev;
-	struct miscdevice sensorhub_device;
-	struct wake_lock sensorhub_wake_lock;
-	struct completion transfer_done;
-	struct task_struct *sensorhub_task;
-	struct sensorhub_event events_head;
-	struct sensorhub_event events[LIBRARY_MAX_NUM];
-	struct sensorhub_event *first_event;
-	int event_number;
-	int transfer_try;
-	int transfer_ready;
-	int large_library_length;
-	char *large_library_data;
-	wait_queue_head_t sensorhub_waitqueue;
-	spinlock_t sensorhub_lock;
+	struct ssp_sensorhub_data *hub_data;
 #endif
 };
 
@@ -347,6 +324,12 @@ void initialize_pressure_factorytest(struct ssp_data *);
 void initialize_magnetic_factorytest(struct ssp_data *);
 void initialize_function_pointer(struct ssp_data *);
 void initialize_magnetic(struct ssp_data *);
+void remove_accel_factorytest(struct ssp_data *);
+void remove_gyro_factorytest(struct ssp_data *);
+void remove_prox_factorytest(struct ssp_data *);
+void remove_light_factorytest(struct ssp_data *);
+void remove_pressure_factorytest(struct ssp_data *);
+void remove_magnetic_factorytest(struct ssp_data *);
 int initialize_event_symlink(struct ssp_data *);
 int accel_open_calibration(struct ssp_data *);
 int gyro_open_calibration(struct ssp_data *);
@@ -391,6 +374,8 @@ void reset_mcu(struct ssp_data *);
 void convert_acc_data(s16 *);
 int sensors_register(struct device *, void *,
 	struct device_attribute*[], char *);
+void sensors_unregister(struct device *,
+	struct device_attribute*[]);
 ssize_t mcu_reset_show(struct device *, struct device_attribute *, char *);
 ssize_t mcu_revision_show(struct device *, struct device_attribute *, char *);
 ssize_t mcu_update_show(struct device *, struct device_attribute *, char *);
@@ -406,12 +391,4 @@ ssize_t mcu_sleep_factorytest_show(struct device *,
 ssize_t mcu_sleep_factorytest_store(struct device *,
 	struct device_attribute *, const char *, size_t);
 
-#ifdef CONFIG_SENSORS_SSP_SENSORHUB
-void ssp_report_sensorhub_notice(struct ssp_data *data, char notice);
-int ssp_handle_sensorhub_data(struct ssp_data *data, char *dataframe,
-				int start, int end);
-int ssp_handle_sensorhub_large_data(struct ssp_data *data, u8 sub_cmd);
-int ssp_initialize_sensorhub(struct ssp_data *data);
-void ssp_remove_sensorhub(struct ssp_data *data);
-#endif
 #endif

@@ -65,6 +65,11 @@
 #include <asm/div64.h>
 #include "internal.h"
 
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+#include <asm/atomic.h>
+#endif
+
+
 #ifdef CONFIG_USE_PERCPU_NUMA_NODE_ID
 DEFINE_PER_CPU(int, numa_node);
 EXPORT_PER_CPU_SYMBOL(numa_node);
@@ -207,6 +212,10 @@ int min_free_order_shift = 1;
 static unsigned long __meminitdata nr_kernel_pages;
 static unsigned long __meminitdata nr_all_pages;
 static unsigned long __meminitdata dma_reserve;
+
+#ifdef CONFIG_ZRAM_FOR_ANDROID
+atomic_t cma_watermark_changed = ATOMIC_INIT(0);
+#endif
 
 #ifdef CONFIG_ARCH_POPULATES_NODE_MAP
 	/*
@@ -6083,6 +6092,12 @@ static int __alloc_contig_migrate_range(unsigned long start, unsigned long end)
 static inline void __update_cma_watermarks(struct zone *zone, int count)
 {
 	unsigned long flags;
+#ifdef CONFIG_ZRAM_FOR_ANDROID	
+	if(count > 0)
+		atomic_set(&cma_watermark_changed,1);
+	else
+		atomic_set(&cma_watermark_changed,0);
+#endif	
 	spin_lock_irqsave(&zone->lock, flags);
 	zone->min_cma_pages += count;
 	spin_unlock_irqrestore(&zone->lock, flags);

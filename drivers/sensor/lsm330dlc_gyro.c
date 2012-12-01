@@ -165,7 +165,6 @@ struct lsm330dlc_gyro_data {
 	bool interruptible;	/* interrupt or polling? */
 	int entries;		/* number of fifo entries */
 	int dps;		/* scale selection */
-	int sensitivity_value;
 	/* fifo data entries */
 	u8 fifo_data[sizeof(struct gyro_t) * 32];
 	u8 ctrl_regs[5];	/* saving register settings */
@@ -358,13 +357,6 @@ static void lsm330dlc_gyro_work_func(struct work_struct *work)
 			data->xyz_data.x -= data->cal_data.x;
 			data->xyz_data.y -= data->cal_data.y;
 			data->xyz_data.z -= data->cal_data.z;
-		} else {
-			data->xyz_data.x -= (data->cal_data.x *
-				data->sensitivity_value / 2);
-			data->xyz_data.y -= (data->cal_data.y *
-				data->sensitivity_value / 2);
-			data->xyz_data.z -= (data->cal_data.z *
-				data->sensitivity_value / 2);
 		}
 	} else {
 		pr_warn("%s, use last data(%d, %d, %d), status=%d, selftest=%d\n",
@@ -518,19 +510,14 @@ static ssize_t lsm330dlc_gyro_selftest_dps_store(struct device *dev,
 
 	ctrl = (data->ctrl_regs[3] & ~FS_MASK);
 
-	if (new_dps == DPS250) {
+	if (new_dps == DPS250)
 		ctrl |= FS_250DPS;
-		data->sensitivity_value = 1;
-	} else if (new_dps == DPS500) {
+	else if (new_dps == DPS500)
 		ctrl |= FS_500DPS;
-		data->sensitivity_value = 2;
-	} else if (new_dps == DPS2000) {
+	else if (new_dps == DPS2000)
 		ctrl |= FS_2000DPS;
-		data->sensitivity_value = 8;
-	} else {
+	else
 		ctrl |= FS_DEFULAT_DPS;
-		data->sensitivity_value = 2;
-	}
 
 	/* apply new dps */
 	mutex_lock(&data->lock);
@@ -545,8 +532,7 @@ static ssize_t lsm330dlc_gyro_selftest_dps_store(struct device *dev,
 	mutex_unlock(&data->lock);
 
 	data->dps = new_dps;
-	pr_info("%s: %d dps stored, sensitivity = %d\n",
-		__func__, data->dps, data->sensitivity_value);
+	pr_info("%s: %d dps stored\n", __func__, data->dps);
 
 	return count;
 }
@@ -1404,8 +1390,7 @@ static int lsm330dlc_gyro_probe(struct i2c_client *client,
 	}
 
 	data->client = client;
-	data->sensitivity_value = 2;
-
+	data->dps = DPS500;
 	/* read chip id */
 	ret = i2c_smbus_read_byte_data(client, WHO_AM_I);
 

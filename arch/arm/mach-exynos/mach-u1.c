@@ -280,6 +280,22 @@ static struct s3c2410_uartcfg smdkc210_uartcfgs[] __initdata = {
  */
 
 #ifdef CONFIG_VIDEO_M5MO
+
+struct class *camera_class;
+
+static int __init camera_class_init(void)
+{
+	camera_class = class_create(THIS_MODULE, "camera");
+	if (IS_ERR(camera_class)) {
+		pr_err("Failed to create class(camera)!\n");
+		return PTR_ERR(camera_class);
+	}
+
+	return 0;
+}
+
+subsys_initcall(camera_class_init);
+
 #define CAM_CHECK_ERR_RET(x, msg)					\
 	if (unlikely((x) < 0)) {					\
 		printk(KERN_ERR "\nfail to %s: err = %d\n", msg, x);	\
@@ -305,7 +321,7 @@ static int m5mo_power_on(void)
 	struct regulator *regulator;
 	int ret = 0;
 
-	printk(KERN_DEBUG "%s: in\n", __func__);
+	printk(KERN_DEBUG "%s: in. hw=0x%X\n", __func__, system_rev);
 
 	ret = gpio_request(GPIO_CAM_VGA_nSTBY, "GPL2");
 	if (ret) {
@@ -1154,6 +1170,9 @@ static struct s5k5bafx_platform_data s5k5bafx_plat = {
 	.pixelformat = V4L2_PIX_FMT_UYVY,
 	.freq = 24000000,
 	.is_mipi = 1,
+	.streamoff_delay = S5K5BAFX_STREAMOFF_DELAY,
+	.init_streamoff = true,
+	.dbg_level = CAMDBG_LEVEL_DEFAULT,
 };
 
 static struct i2c_board_info s5k5bafx_i2c_info = {
@@ -5375,6 +5394,7 @@ static const u8 *mxt224_config[] = {
 #define MXT224E_BLEN_BATT		32
 #define MXT224E_T48_BLEN_BATT		0
 #define MXT224E_BLEN_CHRG		0
+#define MXT224E_T48_BLEN_CHRG		0
 #define MXT224E_MOVFILTER_BATT		14
 #define MXT224E_MOVFILTER_CHRG		46
 #define MXT224E_ACTVSYNCSPERX_NORMAL		29
@@ -6639,6 +6659,7 @@ static struct i2c_board_info i2c_devs16[] __initdata = {
 
 
 #ifdef CONFIG_S3C_DEV_I2C17_EMUL
+#ifdef CONFIG_USBHUB_USB3803
 /* I2C17_EMUL */
 static struct i2c_gpio_platform_data i2c17_platdata = {
 	.sda_pin = GPIO_USB_I2C_SDA,
@@ -6651,7 +6672,7 @@ struct platform_device s3c_device_i2c17 = {
 	.dev.platform_data = &i2c17_platdata,
 };
 
-
+#endif
 #endif /* CONFIG_S3C_DEV_I2C17_EMUL */
 
 #ifdef CONFIG_USBHUB_USB3803
@@ -7099,6 +7120,7 @@ static struct platform_device *smdkc210_devices[] __initdata = {
 #ifdef CONFIG_BATTERY_SAMSUNG
 	&samsung_device_battery,
 #endif
+
 #ifdef CONFIG_FB_S5P
 	&s3c_device_fb,
 #endif
@@ -7156,8 +7178,10 @@ static struct platform_device *smdkc210_devices[] __initdata = {
 #if defined(CONFIG_SMB136_CHARGER_Q1) || defined(CONFIG_SMB328_CHARGER)
 	&s3c_device_i2c19,	/* SMB136, SMB328 */
 #endif
+#if defined(CONFIG_USBHUB_USB3803)
 #if defined(CONFIG_S3C_DEV_I2C17_EMUL)
 	&s3c_device_i2c17,	/* USB HUB */
+#endif
 #endif
 #endif
 
@@ -7818,8 +7842,10 @@ static void __init smdkc210_machine_init(void)
 						ARRAY_SIZE(i2c_devs19_emul));
 #endif
 #ifdef CONFIG_S3C_DEV_I2C17_EMUL
+#ifdef CONFIG_USBHUB_USB3803
 	i2c_register_board_info(17, i2c_devs17_emul,
 						ARRAY_SIZE(i2c_devs17_emul));
+#endif
 #endif
 #endif
 

@@ -79,7 +79,7 @@ static const struct s5c73m3_frmsizeenum preview_frmsizes[] = {
 	{ S5C73M3_PREVIEW_1008X672,	1008,	672,	0x0F },
 	{ S5C73M3_PREVIEW_1184X666,	1184,	666,	0x05 },
 	{ S5C73M3_PREVIEW_720P,	1280,	720,	0x06 },
-#ifdef CONFIG_MACH_T0
+#if defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_BAFFIN)
 	{ S5C73M3_PREVIEW_1280X960,	1280,	960,	0x09 },
 #else
 	{ S5C73M3_PREVIEW_800X600,	800,	600,	0x09 },
@@ -172,7 +172,6 @@ static struct s5c73m3_control s5c73m3_ctrls[] = {
 
 static u8 sysfs_sensor_fw[10] = {0,};
 static u8 sysfs_phone_fw[10] = {0,};
-static u8 sysfs_sensor_type[15] = {0,};
 static u8 sysfs_isp_core[10] = {0,};
 static u8 data_memory[500000] = {0,};
 static u32 crc_table[256] = {0,};
@@ -590,9 +589,21 @@ static int s5c73m3_get_sensor_fw_binary(struct v4l2_subdev *sd)
 	u32 crc_index = 0;
 	int retryCnt = 2;
 
-#ifdef CONFIG_MACH_T0
+#if defined(CONFIG_MACH_T0)
 	if (state->sensor_fw[1] == 'D') {
 		sprintf(fw_path, "/data/cfw/SlimISP_%cK.bin",
+			state->sensor_fw[0]);
+	} else {
+		sprintf(fw_path, "/data/cfw/SlimISP_%c%c.bin",
+			state->sensor_fw[0],
+			state->sensor_fw[1]);
+	}
+#elif defined(CONFIG_MACH_BAFFIN)
+	if (state->sensor_fw[1] == 'D') {
+		sprintf(fw_path, "/data/cfw/SlimISP_%cK.bin",
+			state->sensor_fw[0]);
+	} else if (state->sensor_fw[1] == 'H') {
+		sprintf(fw_path, "/data/cfw/SlimISP_%cM.bin",
 			state->sensor_fw[0]);
 	} else {
 		sprintf(fw_path, "/data/cfw/SlimISP_%c%c.bin",
@@ -843,17 +854,6 @@ static int s5c73m3_get_sensor_fw_version(struct v4l2_subdev *sd)
 	err = s5c73m3_write(sd, 0x3010, 0x00A4, 0x0183);
 	CHECK_ERR(err);
 
-	for (i = 0; i < 5; i++) {
-		err = s5c73m3_read(sd, 0x0000, 0x06+i*2, &sensor_type);
-		CHECK_ERR(err);
-		state->sensor_type[i*2] = sensor_type&0x00ff;
-		state->sensor_type[i*2+1] = (sensor_type&0xff00)>>8;
-#ifdef FEATURE_DEBUG_DUMP
-		cam_err("0x%x\n", sensor_type);
-#endif
-	}
-	state->sensor_type[i*2+2] = ' ';
-
 	for (i = 0; i < 3; i++) {
 		err = s5c73m3_read(sd, 0x0000, i*2, &sensor_fw);
 		CHECK_ERR(err);
@@ -874,11 +874,8 @@ static int s5c73m3_get_sensor_fw_version(struct v4l2_subdev *sd)
 
 	memcpy(sysfs_sensor_fw, state->sensor_fw,
 		sizeof(state->sensor_fw));
-	memcpy(sysfs_sensor_type, state->sensor_type,
-		sizeof(state->sensor_type));
 
-	cam_dbg("Sensor_version = %s, Sensor_Type = %s\n",
-		state->sensor_fw, state->sensor_type);
+	cam_dbg("Sensor_version = %s\n", state->sensor_fw);
 
 	if ((state->sensor_fw[0] < 'A') || state->sensor_fw[0] > 'Z') {
 		cam_dbg("Sensor Version is invalid data\n");
@@ -892,7 +889,7 @@ static int s5c73m3_get_sensor_fw_version(struct v4l2_subdev *sd)
 				cam_err("\n 0010h : ");
 		}
 		mdelay(50);
-		memcpy(state->sensor_type,
+		memcpy(sysfs_sensor_fw,
 			state->sensor_fw,
 			0x100000); /* for kernel panic */
 #endif
@@ -970,9 +967,21 @@ static int s5c73m3_get_phone_fw_version(struct v4l2_subdev *sd)
 	int retVal = 0;
 	int fw_requested = 1;
 
-#ifdef CONFIG_MACH_T0
+#if defined(CONFIG_MACH_T0)
 	if (state->sensor_fw[1] == 'D') {
 		sprintf(fw_path, "SlimISP_%cK.bin",
+			state->sensor_fw[0]);
+	} else {
+		sprintf(fw_path, "SlimISP_%c%c.bin",
+			state->sensor_fw[0],
+			state->sensor_fw[1]);
+	}
+#elif defined(CONFIG_MACH_BAFFIN)
+	if (state->sensor_fw[1] == 'D') {
+		sprintf(fw_path, "SlimISP_%cK.bin",
+			state->sensor_fw[0]);
+	} else if (state->sensor_fw[1] == 'H') {
+		sprintf(fw_path, "SlimISP_%cM.bin",
 			state->sensor_fw[0]);
 	} else {
 		sprintf(fw_path, "SlimISP_%c%c.bin",
@@ -1216,8 +1225,13 @@ static int s5c73m3_check_fw_date(struct v4l2_subdev *sd)
 		phone_date,
 		strcmp((char *)&sensor_date, (char *)&phone_date));
 
-#ifdef CONFIG_MACH_T0
+#if defined(CONFIG_MACH_T0)
 	if (state->sensor_fw[1] == 'D')
+		return -1;
+	else
+		return strcmp((char *)&sensor_date, (char *)&phone_date);
+#elif defined(CONFIG_MACH_BAFFIN)
+	if (state->sensor_fw[1] == 'D' || state->sensor_fw[1] == 'H')
 		return -1;
 	else
 		return strcmp((char *)&sensor_date, (char *)&phone_date);
@@ -2685,9 +2699,21 @@ static int s5c73m3_load_fw(struct v4l2_subdev *sd)
 	mm_segment_t old_fs;
 	long fsize = 0, nread;
 
-#ifdef CONFIG_MACH_T0
+#if defined(CONFIG_MACH_T0)
 	if (state->sensor_fw[1] == 'D') {
 		sprintf(fw_path, "SlimISP_%cK.bin",
+			state->sensor_fw[0]);
+	} else {
+		sprintf(fw_path, "SlimISP_%c%c.bin",
+			state->sensor_fw[0],
+			state->sensor_fw[1]);
+	}
+#elif defined(CONFIG_MACH_BAFFIN)
+	if (state->sensor_fw[1] == 'D') {
+		sprintf(fw_path, "SlimISP_%cK.bin",
+			state->sensor_fw[0]);
+	} else if (state->sensor_fw[1] == 'H') {
+		sprintf(fw_path, "SlimISP_%cM.bin",
 			state->sensor_fw[0]);
 	} else {
 		sprintf(fw_path, "SlimISP_%c%c.bin",
@@ -3392,7 +3418,7 @@ static int s5c73m3_read_vdd_core(struct v4l2_subdev *sd)
 		vdd_core_val = 1150000;
 	} else if (read_val & 0x800) {
 		strcpy(sysfs_isp_core, "1.10V");
-#ifdef CONFIG_MACH_M3
+#if defined(CONFIG_MACH_M3) || defined(CONFIG_MACH_M0_DUOSCTC)
 		state->pdata->set_vdd_core(1150000);
 		vdd_core_val = 1150000;
 #else
@@ -3560,9 +3586,7 @@ static const struct v4l2_subdev_ops s5c73m3_ops = {
 static ssize_t s5c73m3_camera_rear_camtype_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
-	char type[25];
-
-	strcpy(type, sysfs_sensor_type);
+	char type[] = "CML0801";
 	return sprintf(buf, "%s\n", type);
 }
 

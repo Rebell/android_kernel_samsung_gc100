@@ -39,14 +39,16 @@
 #define MIN_BRIGHTNESS		0
 #define MAX_BRIGHTNESS		255
 #define MAX_GAMMA			255
-#define DEFAULT_BRIGHTNESS		160
-#define DEFAULT_GAMMA_LEVEL		GAMMA_160CD
+#define DEFAULT_BRIGHTNESS		130
+#define DEFAULT_GAMMA_LEVEL		GAMMA_130CD
 
 #define LDI_ID_REG			0xD1
 #define LDI_ID_LEN			3
 
 struct lcd_info {
 	unsigned int			bl;
+	unsigned int			candela;
+	unsigned char			pwm;
 	unsigned int			auto_brightness;
 	unsigned int			current_cabc;
 	unsigned int			current_bl;
@@ -77,14 +79,190 @@ struct lcd_info {
 	struct dsim_global		*dsim;
 };
 
-static const unsigned int candela_table[GAMMA_MAX] = {
+static const unsigned int candela_table[GAMMA_MAX-1] = {
 	 30,  40,  50,  60,  70,  80,  90, 100, 110, 120,
 	130, 140, 150, 160, 170, 180, 190, 200, 210, 220,
-	230, 240, 250, MAX_GAMMA
+	230, 240, MAX_BRIGHTNESS, MAX_GAMMA
 };
 
 extern void (*lcd_early_suspend)(void);
 extern void (*lcd_late_resume)(void);
+struct LCD_BRIGHTNESS {
+	int off;
+	int deflt;
+	int dim;
+	int min;
+	int min_center;
+	int center;
+	int center_max;
+	int max;
+};
+
+struct LCD_BRIGHTNESS tbl_plat = {
+	.off = 0,
+	.deflt = 150,
+	.dim = 20,
+	.min = 30,
+	.min_center = 80,
+	.center = 130,
+	.center_max = 190,
+	.max = 255,
+};
+
+struct LCD_BRIGHTNESS tbl_normal = {
+	.off = 0,
+	.deflt = 220,
+	.dim = 15,
+	.min = 15,
+	.min_center = 110,
+	.center = 220,
+	.center_max = 320,
+	.max = 400,
+};
+
+
+struct LCD_BRIGHTNESS pwm_normal = {
+	.off = 0x00,
+	.deflt = 0x61,
+	.dim = 0x0d,
+	.min = 0x0d,
+	.min_center = 0x37,
+	.center = 0x61,
+	.center_max = 0x81,
+	.max = 0xa2,
+};
+
+struct LCD_BRIGHTNESS tbl_cabc = {
+	.off = 0,
+	.deflt = 180,
+	.dim = 15,
+	.min = 15,
+	.min_center = 90,
+	.center = 180,
+	.center_max = 260,
+	.max = 330,
+};
+
+struct LCD_BRIGHTNESS pwm_cabc = {
+	.off = 0x00,
+	.deflt = 0x55,
+	.dim = 0x0d,
+	.min = 0x0d,
+	.min_center = 0x31,
+	.center = 0x55,
+	.center_max = 0x77,
+	.max = 0x9a,
+};
+/*
+
+Brightness Interval from Platform
+
+0    A          B          C          D          E
++----+----------+----------+----------+----------+
+
+
+Brightness Interval for LCD backlight
+
+0'   A'         B'         C'         D'         E'
++----+----------+----------+----------+----------+
+
+0 : tbl_plat.dim
+A : tbl_plat.min
+B : tbl_plat.min_center
+C : tbl_plat.center
+D : tbl_plat.center_max
+E : tbl_plat.max
+
+0' : tbl_XXXX.dim
+A' : tbl_XXXX.min
+B' : tbl_XXXX.min_center
+C' : tbl_XXXX.center
+D' : tbl_XXXX.center_max
+E' : tbl_XXXX.max
+
+(XXXX => normal or cabc)
+
+We need to map the Brightness Interval from Platform to that of LCD.
+
+*/
+static int convert_brightness(struct lcd_info *lcd, const int plat_bl)
+{
+	struct LCD_BRIGHTNESS *tbl;
+	struct LCD_BRIGHTNESS *pwm;
+	int lcd_bl = plat_bl;
+	int lcd_cvt_pwm;
+
+	if (lcd->current_cabc) {
+		tbl = &tbl_cabc;
+		pwm = &pwm_cabc;
+	} else{
+		tbl = &tbl_normal;
+		pwm = &pwm_normal;
+	}
+
+	if (plat_bl <= 0) {
+		lcd_bl = tbl->off;
+	} else if (plat_bl < tbl_plat.min) {
+		lcd_bl = tbl->dim;
+		lcd->pwm = pwm->dim;
+	} else if (plat_bl >= tbl_plat.min && plat_bl < tbl_plat.min_center) {
+
+		lcd_bl -= tbl_plat.min;
+		lcd_cvt_pwm = ((pwm->min_center-pwm->min)*100)/
+					(tbl_plat.min_center-tbl_plat.min);
+		lcd->pwm = (lcd_cvt_pwm * lcd_bl)/100 + pwm->min;
+		lcd_bl *= ((tbl->min_center-tbl->min)*100)/
+					(tbl_plat.min_center-tbl_plat.min);
+		lcd_bl /= 100;
+		/* *100/100 is to prevent integer lcd_bl becomes 0 */
+		lcd_bl += tbl->min;
+
+	} else if (plat_bl >= tbl_plat.min_center &&
+					plat_bl < tbl_plat.center) {
+
+		lcd_bl -= tbl_plat.min_center;
+		lcd_cvt_pwm = ((pwm->center - pwm->min_center)*100)/
+					(tbl_plat.center-tbl_plat.min_center);
+		lcd->pwm = (lcd_cvt_pwm * lcd_bl)/100 + pwm->min_center;
+		lcd_bl *= ((tbl->center-tbl->min_center)*100)/
+					(tbl_plat.center-tbl_plat.min_center);
+		lcd_bl /= 100;
+		lcd_bl += tbl->min_center;
+
+	} else if (plat_bl >= tbl_plat.center &&
+					plat_bl < tbl_plat.center_max) {
+
+		lcd_bl -= tbl_plat.center;
+		lcd_cvt_pwm = ((pwm->center_max - pwm->center)*100)/
+					(tbl_plat.center_max-tbl_plat.center);
+		lcd->pwm = (lcd_cvt_pwm * lcd_bl)/100 + pwm->center;
+		lcd_bl *= ((tbl->center_max-tbl->center)*100)/
+					(tbl_plat.center_max-tbl_plat.center);
+		lcd_bl /= 100;
+		lcd_bl += tbl->center;
+
+	} else if (plat_bl >= tbl_plat.center_max &&
+					plat_bl < tbl_plat.max) {
+
+		lcd_bl -= tbl_plat.center_max;
+		lcd_cvt_pwm = ((pwm->max - pwm->center_max)*100)/
+					(tbl_plat.max-tbl_plat.center_max);
+		lcd->pwm = (lcd_cvt_pwm * lcd_bl)/100 + pwm->center_max;
+		lcd_bl *= ((tbl->max-tbl->center_max)*100)/
+					(tbl_plat.max-tbl_plat.center_max);
+		lcd_bl /= 100;
+		lcd_bl += tbl->center_max;
+
+	} else {
+		lcd_bl = tbl->max;
+		lcd->pwm = pwm->max;
+	}
+
+	/*printk("%s : platform : %dcd => brightness :
+	%dcd, pwm : 0x%02x\n", __func__, plat_bl, lcd_bl, lcd->pwm);*/
+
+	return lcd_bl;
+}
 
 #if defined(GPIO_OLED_DET)
 static void oled_detection_work(struct work_struct *work)
@@ -218,7 +396,7 @@ static int get_backlight_level_from_brightness(int brightness)
 
 static int lms501xx_gamma_ctl(struct lcd_info *lcd)
 {
-	SEQ_SET_BL[1] = candela_table[lcd->bl];
+	SEQ_SET_BL[1] = lcd->pwm;
 	lms501xx_write(lcd, SEQ_SET_BL, ARRAY_SIZE(SEQ_SET_BL));
 	lms501xx_write(lcd, SEQ_SET_DISP, ARRAY_SIZE(SEQ_SET_DISP));
 	return 0;
@@ -249,10 +427,12 @@ static int update_brightness(struct lcd_info *lcd, u8 force)
 
 	brightness = lcd->bd->props.brightness;
 
-	if (unlikely(!lcd->auto_brightness && brightness > 250))
-		brightness = 250;
+	if (unlikely(!lcd->auto_brightness && brightness > MAX_BRIGHTNESS))
+		brightness = MAX_BRIGHTNESS;
 
 	lcd->bl = get_backlight_level_from_brightness(brightness);
+	lcd->candela =
+	convert_brightness(lcd, candela_table[lcd->bl]);
 
 	if ((force) || ((lcd->ldi_enable) && (lcd->current_bl != lcd->bl))) {
 
@@ -262,7 +442,7 @@ static int update_brightness(struct lcd_info *lcd, u8 force)
 		lcd->current_bl = lcd->bl;
 
 		dev_info(&lcd->ld->dev, "brightness=%d, bl=%d, candela=%d\n",
-				brightness, lcd->bl, candela_table[lcd->bl]);
+				brightness, lcd->bl, lcd->candela);
 	}
 
 	mutex_unlock(&lcd->bl_lock);
@@ -333,8 +513,6 @@ static int lms501xx_power_on(struct lcd_info *lcd)
 		dev_err(&lcd->ld->dev, "failed to initialize ldi.\n");
 		goto err;
 	}
-
-	msleep(120);
 
 	ret = lms501xx_ldi_enable(lcd);
 	if (ret) {
@@ -479,9 +657,9 @@ static ssize_t power_reduce_store(struct device *dev,
 				 __func__, lcd->current_cabc, value);
 			mutex_lock(&lcd->bl_lock);
 			lcd->current_cabc = value;
-			if (lcd->ldi_enable)
-				lms501xx_set_cabc(lcd);
 			mutex_unlock(&lcd->bl_lock);
+			if (lcd->ldi_enable)
+				update_brightness(lcd, 1);
 		}
 	}
 	return size;

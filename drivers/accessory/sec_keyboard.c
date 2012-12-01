@@ -44,6 +44,38 @@ static void sec_keyboard_remapkey(struct work_struct *work)
 	data->remap_key = 0;
 }
 
+static void sec_keyboard_ack(struct work_struct *work)
+{
+	unsigned int ackcode = 0;
+	char *envp[3];
+	struct sec_keyboard_drvdata *data = container_of(work,
+			struct sec_keyboard_drvdata, ack_dwork.work);
+
+	if (data->ack_code) {
+		ackcode = data->ack_code;
+		sec_keyboard_tx(data, ackcode);
+	}
+	printk(KERN_DEBUG "[Keyboard] Ack code to KBD 0x%x\n", ackcode);
+
+	switch (data->ack_code) {
+	case 0x68:
+		data->noti_univ_kbd_dock(true);
+		break;
+	case 0x69:
+		break;
+	case 0x6a:
+		data->noti_univ_kbd_dock(false);
+		break;
+	case 0x6b:
+		break;
+	case 0x6c:
+		data->noti_univ_kbd_dock(true);
+		break;
+	}
+
+	data->ack_code = 0;
+}
+
 static void release_all_keys(struct sec_keyboard_drvdata *data)
 {
 	int i;
@@ -105,7 +137,16 @@ static void sec_keyboard_process_data(
 			data->pressed[scan_code] = true;
 			schedule_delayed_work(&data->remap_dwork, HZ/3);
 			break;
-
+		case 0x68:
+		case 0x69:
+		case 0x6a:
+		case 0x6b:
+		case 0x6c:
+			data->ack_code = scan_code;
+			schedule_delayed_work(&data->ack_dwork, HZ/200);
+			printk(KERN_DEBUG "[Keyboard] scan_code %d Received.\n",
+				scan_code);
+			break;
 		case 0xc5:
 		case 0xc8:
 			keycode = (scan_code & 0x7f);
@@ -355,11 +396,13 @@ static int __devinit sec_keyboard_probe(struct platform_device *pdev)
 	ddata->callbacks.check_keyboard_dock = check_keyboard_dock;
 	if (pdata->register_cb)
 		pdata->register_cb(&ddata->callbacks);
+	ddata->noti_univ_kbd_dock = pdata->noti_univ_kbd_dock;
 
 	memcpy(ddata->keycode, sec_keycodes, sizeof(sec_keycodes));
 
 	INIT_DELAYED_WORK(&ddata->remap_dwork, sec_keyboard_remapkey);
 	INIT_DELAYED_WORK(&ddata->power_dwork, sec_keyboard_power);
+	INIT_DELAYED_WORK(&ddata->ack_dwork, sec_keyboard_ack);
 
 	platform_set_drvdata(pdev, ddata);
 	input_set_drvdata(input, ddata);
@@ -443,6 +486,7 @@ err_input_allocate_device:
 	input_free_device(input);
 	del_timer_sync(&ddata->remap_dwork.timer);
 	del_timer_sync(&ddata->power_dwork.timer);
+	del_timer_sync(&ddata->ack_dwork.timer);
 err_free_mem:
 	kfree(ddata);
 	return error;

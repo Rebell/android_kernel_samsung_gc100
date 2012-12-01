@@ -50,8 +50,6 @@
 
 #include <asm/unaligned.h>
 
-#include "../keyboard/cypress/cypress-touchkey.h"
-
 #define MAX_FINGERS		10
 #define MAX_WIDTH		30
 #define MAX_PRESSURE		255
@@ -145,7 +143,7 @@ int touch_is_pressed = 0;
 #define ISC_DL_MODE	1
 
 /* 4.8" OCTA LCD */
-#define FW_VERSION_4_8 0xBB
+#define FW_VERSION_4_8 0xBD
 
 #define MAX_FW_PATH 255
 #define TSP_FW_FILENAME "melfas_fw.bin"
@@ -380,7 +378,7 @@ static void change_dvfs_lock(struct work_struct *work)
 		pr_err("%s: dev change bud lock failed(%d)\n",\
 				__func__, __LINE__);
 	else
-		pr_debug("[TSP] change_dvfs_lock");
+		pr_info("[TSP] change_dvfs_lock");
 	mutex_unlock(&info->dvfs_lock);
 }
 static void set_dvfs_off(struct work_struct *work)
@@ -399,7 +397,7 @@ static void set_dvfs_off(struct work_struct *work)
 
 	exynos_cpufreq_lock_free(DVFS_LOCK_ID_TSP);
 	info->dvfs_lock_status = false;
-	//pr_debug("[TSP] DVFS Off!");
+	pr_info("[TSP] DVFS Off!");
 	mutex_unlock(&info->dvfs_lock);
 	}
 
@@ -440,7 +438,7 @@ static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 				msecs_to_jiffies(TOUCH_BOOSTER_CHG_TIME));
 
 			info->dvfs_lock_status = true;
-			//pr_debug("[TSP] DVFS On![%d]", info->cpufreq_level);
+			pr_info("[TSP] DVFS On![%d]", info->cpufreq_level);
 		}
 	} else if (on == 2) {
 		cancel_delayed_work(&info->work_dvfs_off);
@@ -501,7 +499,7 @@ static void release_all_fingers(struct mms_ts_info *info)
 	input_sync(info->input_dev);
 #if TOUCH_BOOSTER
 	set_dvfs_lock(info, 2);
-	pr_debug("[TSP] dvfs_lock free.\n ");
+	pr_info("[TSP] dvfs_lock free.\n ");
 #endif
 }
 
@@ -519,6 +517,7 @@ static void mms_set_noise_mode(struct mms_ts_info *info)
 	} else {
 		dev_notice(&client->dev, "noise_mode & TA disconnect!!!\n");
 		i2c_smbus_write_byte_data(info->client, 0x30, 0x2);
+		info->noise_mode = 0;
 	}
 }
 
@@ -682,9 +681,6 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 				, angle, palm);
 #else
 			if (info->finger_state[id] != 0) {
-                // report state to cypress-touchkey for backlight timeout
-                touchscreen_state_report(0);
-
 				dev_notice(&client->dev,
 					"finger [%d] up, palm %d\n", id, palm);
 			}
@@ -723,10 +719,6 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 #else
 		if (info->finger_state[id] == 0) {
 			info->finger_state[id] = 1;
-
-            // report state to cypress-touchkey for backlight timeout
-            touchscreen_state_report(1);
-
 			dev_notice(&client->dev,
 				"finger [%d] down, palm %d\n", id, palm);
 		}
@@ -3052,7 +3044,7 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 		info->register_cb(&info->callbacks);
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
-	info->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
+	info->early_suspend.level = EARLY_SUSPEND_LEVEL_STOP_DRAWING;
 	info->early_suspend.suspend = mms_ts_early_suspend;
 	info->early_suspend.resume = mms_ts_late_resume;
 	register_early_suspend(&info->early_suspend);

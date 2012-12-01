@@ -45,7 +45,7 @@ static int sprd8803_on(struct modem_ctl *mc)
 	gpio_set_value(mc->gpio_cp_ctrl2, 1);
 #endif
 	msleep(100);
-//	pr_info("[MODEM_IF] %s\n", __func__); // Kill spam
+	pr_info("[MODEM_IF] %s\n", __func__);
 	gpio_set_value(mc->gpio_cp_on, 1);
 	gpio_set_value(mc->gpio_pda_active, 1);
 
@@ -56,7 +56,7 @@ static int sprd8803_on(struct modem_ctl *mc)
 
 static int sprd8803_off(struct modem_ctl *mc)
 {
-	pr_debug("[MODEM_IF] %s\n", __func__);
+	pr_info("[MODEM_IF] %s\n", __func__);
 
 	if (!mc->gpio_cp_on) {
 		mif_err("no gpio data\n");
@@ -72,7 +72,7 @@ static int sprd8803_off(struct modem_ctl *mc)
 
 static int sprd8803_reset(struct modem_ctl *mc)
 {
-	pr_debug("[MODEM_IF] %s\n", __func__);
+	pr_info("[MODEM_IF] %s\n", __func__);
 
 	spi_thread_restart();
 
@@ -81,20 +81,20 @@ static int sprd8803_reset(struct modem_ctl *mc)
 
 static int sprd8803_boot_on(struct modem_ctl *mc)
 {
-	pr_debug("[MODEM_IF] %s %d\n", __func__, sprd_boot_done);
-	return sprd_boot_done;
+	pr_info("[MODEM_IF] %s %d\n", __func__, mc->phone_state);
+	return mc->phone_state;
 }
 
 static int sprd8803_boot_off(struct modem_ctl *mc)
 {
-	pr_debug("[MODEM_IF] %s\n", __func__);
+	pr_info("[MODEM_IF] %s\n", __func__);
 	spi_sema_init();
 	return 0;
 }
 
 static int sprd8803_dump_reset(struct modem_ctl *mc)
 {
-	pr_debug("[MODEM_IF] %s\n", __func__);
+	pr_info("[MODEM_IF] %s\n", __func__);
 
 	if (!mc->gpio_ap_cp_int2)
 		return -ENXIO;

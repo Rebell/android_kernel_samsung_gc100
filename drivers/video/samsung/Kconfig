@@ -272,6 +272,10 @@ config S6E8AA0_AMS480GYXX
 	---help---
 	This enables support for Samsung S6E8AA0 AMS480GYXX(M0) PANEL
 
+config S6E8AA0_AMS465XX
+	bool "AMS465XX(Superior)"
+	---help---
+	This enables support for Samsung S6E8AA0 AMS465XX(Superior) PANEL
 endchoice
 
 config AID_DIMMING

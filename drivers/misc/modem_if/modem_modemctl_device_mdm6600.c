@@ -332,7 +332,7 @@ static int mdm6600_on(struct modem_ctl *mc)
 		return -ENXIO;
 	}
 
-	gpio_set_value(mc->gpio_pda_active, 0);
+	gpio_set_value(mc->gpio_pda_active, 1);
 
 	gpio_set_value(mc->gpio_cp_on, 1);
 	msleep(500);
@@ -345,8 +345,6 @@ static int mdm6600_on(struct modem_ctl *mc)
 
 	gpio_set_value(mc->gpio_cp_on, 0);
 	msleep(500);
-
-	gpio_set_value(mc->gpio_pda_active, 1);
 
 #if defined(CONFIG_LINK_DEVICE_PLD)
 	gpio_set_value(mc->gpio_fpga_cs_n, 1);

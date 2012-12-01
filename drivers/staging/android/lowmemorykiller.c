@@ -69,6 +69,7 @@ static int lmk_kill_pid = 0;
 static int lmk_kill_ok = 0;
 
 extern atomic_t optimize_comp_on;
+extern atomic_t cma_watermark_changed;
 
 extern int isolate_lru_page_compcache(struct page *page);
 extern void putback_lru_page(struct page *page);
@@ -429,7 +430,7 @@ static ssize_t lmk_state_store(struct device *dev,
 	sscanf(buf, "%d,%d", &lmk_kill_pid, &lmk_kill_ok);
 
 	/* if the screen on, the optimized compcache will stop */
-	if (atomic_read(&optimize_comp_on) != 1)
+	if ((atomic_read(&optimize_comp_on) != 1) && (atomic_read(&cma_watermark_changed) == 1))
 		return size;
 
 	if (lmk_kill_ok == 1) {
@@ -518,15 +519,20 @@ static int __init lowmem_init(void)
 #ifdef CONFIG_ZRAM_FOR_ANDROID
 	struct zone *zone;
 	unsigned int high_wmark = 0;
+	unsigned int low_wmark = 0;
 #endif
 	task_free_register(&task_nb);
 	register_shrinker(&lowmem_shrinker);
 
 #ifdef CONFIG_ZRAM_FOR_ANDROID
 	for_each_zone(zone) {
-		if (high_wmark < zone->watermark[WMARK_HIGH])
+		if (high_wmark < zone->watermark[WMARK_HIGH]) {
 			high_wmark = zone->watermark[WMARK_HIGH];
+			low_wmark = zone->watermark[WMARK_LOW];
+		}
 	}
+	
+	high_wmark += low_wmark;
 	check_free_memory = (high_wmark != 0) ? high_wmark : CHECK_FREE_MEMORY;
 
 	lmk_class = class_create(THIS_MODULE, "lmk");

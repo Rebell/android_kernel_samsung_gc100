@@ -43,6 +43,7 @@
 #include <mach/dev.h>
 #include <mach/asv.h>
 #include <mach/smc.h>
+#include <mach/sec_debug.h>
 
 #include <plat/map-s5p.h>
 #include <plat/gpio-cfg.h>
@@ -268,7 +269,6 @@ static unsigned int exynos4412_int_volt[ASV_GROUP][LV_END] = {
 	{1037500,  987500,  987500, 900000, 900000, 862500, 850000}, /* ASV10 */
 	{1025000,  975000,  975000, 887500, 887500, 850000, 850000}, /* RESERVED */
 };
-
 
 /* 20120822 DVFS table for pega prime */
 /* Because buck1 of pmic can be set to 50mV step size, 50mV table is used */
@@ -546,7 +546,12 @@ static void exynos4x12_set_bus_volt(void)
 
 void exynos4x12_target(int index)
 {
-	unsigned int tmp;
+	unsigned int tmp, val;
+
+	sec_debug_aux_log(SEC_DEBUG_AUXLOG_CPU_BUS_CLOCK_CHANGE,
+			"%s: div_index=%d(%ps)", __func__, index,
+			__builtin_return_address(0));
+
 
 	/* Change Divider - DMC0 */
 	tmp = exynos4_busfreq_table[index].clk_dmc0div;

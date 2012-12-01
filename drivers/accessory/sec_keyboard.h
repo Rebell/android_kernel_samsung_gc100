@@ -51,6 +51,7 @@ struct sec_keyboard_drvdata {
 	struct device *keyboard_dev;
 	struct delayed_work remap_dwork;
 	struct delayed_work power_dwork;
+	struct delayed_work ack_dwork;
 	struct sec_keyboard_callbacks callbacks;
 	struct serio *serio;
 	struct serio_driver serio_driver;
@@ -59,6 +60,7 @@ struct sec_keyboard_drvdata {
 #endif
 	void	(*acc_power)(u8 token, bool active);
 	void (*check_uart_path)(bool en);
+	int (*noti_univ_kbd_dock)(bool attached);
 	bool led_on;
 	bool dockconnected;
 	bool pre_connected;
@@ -69,6 +71,7 @@ struct sec_keyboard_drvdata {
 	unsigned int remap_key;
 	unsigned int kl;
 	unsigned int pre_kl;
+	unsigned int ack_code;
 	unsigned short keycode[KEYBOARD_SIZE];
 	unsigned long connected_time;
 	unsigned long disconnected_time;

@@ -3912,7 +3912,6 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 				ret);
 			goto err_config;
 		}
-		info->fw_core_ver = get_fw_version(info, SEC_CORE);
 	}
 
 	if (info->ldi == 'L') {
@@ -3925,23 +3924,6 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 				dev_err(&client->dev,
 					"failed to initialize (%d)\n", ret);
 				goto err_config;
-			}
-			info->fw_core_ver = get_fw_version(info, SEC_CORE);
-		}
-		info->panel = get_panel_version(info);
-		if (info->panel != 'M') {
-			if (info->fw_core_ver == 0x53) {
-				dev_err(&client->dev, "cannot read panel info\n");
-				dev_err(&client->dev, "excute core firmware update\n");
-				ret = mms_ts_fw_load(info, true, 'L');
-			} else {
-				dev_err(&client->dev, "excute core firmware update\n");
-				ret = mms_ts_core_fw_load(info);
-			}
-			if (ret) {
-				dev_err(&client->dev,
-					"failed to initialize (%d)\n",
-					ret);
 			}
 		}
 		info->fw_ic_ver = get_fw_version(info, SEC_CONFIG);
@@ -3990,8 +3972,6 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 						ret);
 					goto err_config;
 				}
-				info->fw_core_ver =
-					get_fw_version(info, SEC_CORE);
 			}
 			info->fw_ic_ver = get_fw_version(info, SEC_CONFIG);
 			if ((info->fw_ic_ver < FW_VERSION_M) &&
@@ -4016,11 +3996,12 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 		} else {
 			dev_err(&client->dev, "cannot read panel info\n");
 			info->fw_ic_ver = get_fw_version(info, SEC_CONFIG);
-			if (info->fw_core_ver == 0x53) {
+			if ((info->fw_core_ver == 0x53) &&
+				(info->fw_ic_ver == 0xff)) {
 				dev_err(&client->dev, "firmware update\n");
 				dev_err(&client->dev, "ic:0x%x, bin:0x%x\n",
 					info->fw_ic_ver, FW_VERSION_M);
-				ret = mms_ts_fw_load(info, true, 'N');
+				ret = mms_ts_fw_load(info, false, 'N');
 			} else {
 				dev_err(&client->dev, "excute core firmware update\n");
 				ret = mms_ts_core_fw_load(info);

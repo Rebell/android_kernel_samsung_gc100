@@ -100,7 +100,11 @@ static u8 gp2a_original_image_030a[COL][2] = {
 	/*	{0x05 , 0x00}, */
 	/*	{0x06 , 0xFF}, */
 	/*	{0x07 , 0xFF}, */
+#if defined(CONFIG_MACH_BAFFIN)
+	{0x08, 0x08},
+#else
 	{0x08, 0x09},		/*PS mode LTH(Loff):  (??mm) */
+#endif
 	{0x09, 0x00},		/*PS mode LTH(Loff) : */
 	{0x0A, 0x0A},		/*PS mode HTH(Lon) : (??mm) */
 	{0x0B, 0x00},		/* PS mode HTH(Lon) : */

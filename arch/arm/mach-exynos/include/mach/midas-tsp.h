@@ -27,6 +27,7 @@ int cyttsp4_hw_reset(void);
 int cyttsp4_hw_power(int on);
 int cyttsp4_hw_recov(int on);
 int cyttsp4_irq_stat(void);
+int cyttsp4_led_power(int on);
 void midas_tsp_set_platdata(struct touch_platform_data *pdata);
 #else
 void midas_tsp_set_platdata(struct melfas_tsi_platform_data *pdata);
